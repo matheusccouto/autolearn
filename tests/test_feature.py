@@ -31,4 +31,4 @@ class TestLoad:
             features_file_name="features.json",
         )
         feat_matrix = feature.load("entityset", "features.json")
-        pd.testing.assert_frame_equal(feat.x, feat_matrix)
+        pd.testing.assert_frame_equal(feat._x, feat_matrix)

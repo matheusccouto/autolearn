@@ -15,6 +15,6 @@ class TestSplit:
     def test_split(self):
         """ Test split params method. """
         feat = feature.Selector(data, target, features)
-        datasets = autolearn.split(feat.x, feat.y, 5000, 0.25)
-        test_len = 0.25 * feat.x.shape[0]
+        datasets = autolearn.split(feat._x, feat._y, 5000, 0.25)
+        test_len = 0.25 * feat._x.shape[0]
         assert abs(datasets[1].shape[0] - test_len) < 1

@@ -18,7 +18,7 @@ class TestModel:
 
     def test_tune(self):
         model = autolearn.Model(task="regression")
-        model.tune(x=self.x, y=self.y, test_ratio=0.8, n_trials=10, n_jobs=-1)
+        model.tune(x=self.x, y=self.y, test_ratio=0.8, n_trials=10, n_jobs=1)
         assert hasattr(model, "params")
 
 

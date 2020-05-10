@@ -22,11 +22,11 @@ class TestSelectorInit:
 
     def test_init_x(self):
         """ Test if features are correctly split. """
-        pd.testing.assert_frame_equal(self.feat.x, data[features])
+        pd.testing.assert_frame_equal(self.feat._x, data[features])
 
     def test_init_y(self):
         """ Test if features are correctly split. """
-        pd.testing.assert_series_equal(self.feat.y, data[target])
+        pd.testing.assert_series_equal(self.feat._y, data[target])
 
 
 class TestDropNA:
@@ -44,25 +44,25 @@ class TestDropNA:
     def test_drop(self):
         """ Test if drop class with NA ratio above the threshold."""
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         feat.drop_na(threshold=self.na_ratio - 0.01, ignore=None)
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before > after
 
     def test_ignore(self):
         """ Test if ignores a feature. """
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         feat.drop_na(threshold=self.na_ratio - 0.01, ignore="fake")
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before == after
 
     def test_equals_threshold(self):
         """ Test if keep feature with value equals the threshold. """
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         feat.drop_na(threshold=self.na_ratio, ignore="fake")
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before == after
 
 
@@ -78,17 +78,17 @@ class TestDropSingle:
     def test_drop_single(self):
         """ Test dropping features with single values. """
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         feat.drop_single()
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before > after
 
     def test_ignore(self):
         """ Test if ignores a feature. """
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         feat.drop_single(ignore="single")
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before == after
 
 
@@ -104,18 +104,18 @@ class TestDropCorrelated:
     def test_drop(self):
         """ Test dropping features. """
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         feat.drop_correlated(threshold=0.95)
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before > after
 
     def test_ignore(self):
         """ Test if ignores a feature. """
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         # Ignore the the feature that would be dropped.
         feat.drop_correlated(threshold=0.95, ignore="copy")
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before == after
 
 
@@ -139,9 +139,9 @@ class TestDropLowImportance:
     def test_drop(self):
         """ Test dropping features. """
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         feat.drop_low_importance(task="regression", threshold=0.95, n_times=1)
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before > after
 
 
@@ -178,9 +178,9 @@ class TestDropSingleDependence:
     def test_drop_single_dependent(self):
         """ Test dropping features. """
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         feat.drop_single_dependence(threshold=0.95)
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before > after
 
 
@@ -197,9 +197,9 @@ class TestDropMultipleDependence:
     def test_drop_dependent(self):
         """ Test dropping columns. """
         feat = feature.Selector(self.data, target)
-        before = feat.x.shape[1]
+        before = feat._x.shape[1]
         feat.drop_multiple_dependence(threshold=0.95)
-        after = feat.x.shape[1]
+        after = feat._x.shape[1]
         assert before > after
 
 
@@ -211,7 +211,7 @@ class TestSelect:
         cls.feat = feature.Selector(data, target, features)
 
     def test_select(self):
-        before = self.feat.x.shape[1]
+        before = self.feat._x.shape[1]
         self.feat.select(task="regression")
-        after = self.feat.x.shape[1]
+        after = self.feat._x.shape[1]
         assert before > after

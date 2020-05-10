@@ -31,7 +31,46 @@ def load(
     return ft.calculate_feature_matrix(features, es, verbose=verbose)
 
 
-class Creator:
+class _Operator:
+    """ Base class for operations with feature. """
+
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        target: str,
+        features: Optional[Sequence[str]] = None,
+    ):
+        """
+        Args:
+            data: DataFrame (features + target).
+            target: Target feature name.
+            features: Features name sequence.
+        """
+        if features is None:
+            features = data.columns
+        self._features = features
+        self._target = target
+
+        self._x = data[features]
+        self._y = data[target]
+
+    @property
+    def data(self):
+        """ Get data (features + target). """
+        return self._x.join(self._y)
+
+    @property
+    def features(self):
+        """ Get features names. """
+        return list(self._features)
+
+    @property
+    def target(self):
+        """ Get target name. """
+        return list(self._target)
+
+
+class Creator(_Operator):
     """ Automated feature creation. """
 
     TRANS_PRIMITIVES: Sequence[str] = [
@@ -43,26 +82,6 @@ class Creator:
         "and",
         "or",
     ]
-
-    def __init__(
-        self,
-        data: pd.DataFrame,
-        target: str,
-        features: Optional[Sequence[str]] = None,
-    ):
-        """
-        Args:
-            data: DataFrame.
-            target: Target.
-            features: Features.
-        """
-        if features is None:
-            features = data.columns
-        self.features = features
-        self.target = target
-
-        self.x = data[features]
-        self.y = data[target]
 
     @staticmethod
     def _set_group(features: Sequence[str]) -> Dict[str, Sequence[str]]:
@@ -252,19 +271,19 @@ class Creator:
         """
         # Manage groups.
         if not groups:
-            groups = self._set_group(self.features)
+            groups = self._set_group(self._features)
         groups = self._fix_groups(
-            features=self.features, groups=groups, use_forgotten=use_forgotten
+            features=self._features, groups=groups, use_forgotten=use_forgotten
         )
 
-        es = self._set_entity_set(data=self.x, groups=groups)
+        es = self._set_entity_set(data=self._x, groups=groups)
 
-        old_n_features = self.x.shape[1]  # For comparing later.
+        old_n_features = self._x.shape[1]  # For comparing later.
 
         if not trans_primitives:
             trans_primitives = self.TRANS_PRIMITIVES
 
-        index_name = self._index_name(self.x)
+        index_name = self._index_name(self._x)
 
         # Define kwargs outside the function just to improve readability.
         dfs_kwargs = {
@@ -283,32 +302,32 @@ class Creator:
         dfs = [matrix for matrix, _ in dfs]
 
         # Concat all params from all groups to form the new dataset.
-        self.x = pd.concat(dfs, axis=1)
+        self._x = pd.concat(dfs, axis=1)
         # Do a little cleaning just to remove useless features.
-        self.x = selection.remove_low_information_features(self.x)
+        self._x = selection.remove_low_information_features(self._x)
 
         # Keep only feature names that are still in the dataset.
         # noinspection PyProtectedMember
         features = [
-            feature for feature in features if feature._name in self.x.columns
+            feature for feature in features if feature._name in self._x.columns
         ]
         # Update property.
         # noinspection PyProtectedMember
-        self.features = [feature._name for feature in features]
+        self._features = [feature._name for feature in features]
 
         # Export params.
         es.to_csv(entity_set_folder_name)
         ft.save_features(features, features_file_name)
 
         # Compare number of features.
-        n_new_features = self.x.shape[1] - old_n_features
+        n_new_features = self._x.shape[1] - old_n_features
         if verbose:
             print(f"{n_new_features} features created.")
 
-        return self.x
+        return self._x
 
 
-class Selector:
+class Selector(_Operator):
     """ Automated feature selection. """
 
     def __init__(
@@ -317,21 +336,15 @@ class Selector:
         target: str,
         features: Optional[Sequence[str]] = None,
     ):
-        """
-        Args:
-            data: DataFrame.
-            target: Target feature name.
-            features: Features name sequence.
-        """
-        if features is None:
-            features = data.columns
-        self.features = features
-        self.target = target
+        super().__init__(data=data, target=target, features=features)
+        self._importances = None
 
-        self.x = data[features]
-        self.y = data[target]
-
-        self._importances = pd.DataFrame()
+    @property
+    def importances(self):
+        """ Get features importance dataframe. """
+        if self._importances is None:
+            raise AttributeError("Features importances are not yet available.")
+        return self._importances
 
     def drop_na(
         self,
@@ -350,7 +363,7 @@ class Selector:
         Returns:
             DataFrame.
         """
-        before = len(self.features)
+        before = len(self._features)
 
         # Considers Inf or -Inf as NA
         pd.set_option("mode.use_inf_as_na", True)
@@ -362,7 +375,7 @@ class Selector:
         # columns. So this method has no use.
 
         # Get NA ratios.
-        na_ratio = self.x.isna().sum() / self.x.shape[0]
+        na_ratio = self._x.isna().sum() / self._x.shape[0]
         # Force the columns we want to ignore to zero.
         if ignore:
             na_ratio.loc[ignore] = 0
@@ -370,17 +383,17 @@ class Selector:
         # columns are indexes now.
         keep = na_ratio[na_ratio <= threshold].index
 
-        self.x = self.x[keep]
-        self.features = list(self.x.columns)
+        self._x = self._x[keep]
+        self._features = list(self._x.columns)
 
-        after = len(self.features)
+        after = len(self._features)
         if verbose:
             print(
                 f"Dropped {before - after} features with NA ratio greater than "
                 f"{threshold}"
             )
 
-        return self.x
+        return self._x
 
     def drop_single(
         self,
@@ -399,24 +412,24 @@ class Selector:
         Returns:
             DataFrame
         """
-        before = len(self.features)
+        before = len(self._features)
 
-        n_unique = self.x.nunique(axis=0, dropna=False)
+        n_unique = self._x.nunique(axis=0, dropna=False)
         # Force the columns we want to ignore to zero.
         if ignore:
             n_unique.loc[ignore] = np.inf
         keep = n_unique[n_unique > 1].index
 
-        self.x = self.x[keep]
-        self.features = list(self.x.columns)
+        self._x = self._x[keep]
+        self._features = list(self._x.columns)
 
-        after = len(self.features)
+        after = len(self._features)
         if verbose:
             print(
                 f"Dropped {before - after} features with a single unique value"
             )
 
-        return self.x
+        return self._x
 
     def drop_correlated(
         self,
@@ -437,9 +450,9 @@ class Selector:
         Returns:
             DataFrame
         """
-        before = len(self.features)
+        before = len(self._features)
 
-        corr = self.x.corr(method="spearman").abs()
+        corr = self._x.corr(method="spearman").abs()
 
         # Keep only the upper triangle. (k=1 exclude the diagonal).
         # Whenever applying a numpy function, turn itself into a numpy
@@ -457,17 +470,17 @@ class Selector:
         # Get index where max correlation attend the threshold.
         keep = max_corr[max_corr <= threshold].index
 
-        self.x = self.x[keep]
-        self.features = list(self.x.columns)
+        self._x = self._x[keep]
+        self._features = list(self._x.columns)
 
-        after = len(self.features)
+        after = len(self._features)
         if verbose:
             print(
                 f"Dropped {before - after} features with correlation greater "
                 f"than {threshold}"
             )
 
-        return self.x
+        return self._x
 
     @staticmethod
     def dependence(x: pd.DataFrame) -> pd.DataFrame:
@@ -502,9 +515,9 @@ class Selector:
         Returns:
             DataFrame
         """
-        before = len(self.features)
+        before = len(self._features)
 
-        matrix = self.dependence(self.x)
+        matrix = self.dependence(self._x)
         matrix = matrix.drop("Dependence", axis=1)
         np.fill_diagonal(matrix.values, val=0)  # Inplace
 
@@ -517,17 +530,17 @@ class Selector:
                 matrix = matrix.drop(idx, axis=0)
                 matrix = matrix.drop(idx, axis=1)
 
-        self.x = self.x[matrix.index]
-        self.features = list(self.x.columns)
+        self._x = self._x[matrix.index]
+        self._features = list(self._x.columns)
 
-        after = len(self.features)
+        after = len(self._features)
         if verbose:
             print(
                 f"Dropped {before - after} features with dependence from a "
                 f"single other feature greater than {threshold}"
             )
 
-        return self.x
+        return self._x
 
     def drop_multiple_dependence(
         self,
@@ -550,14 +563,14 @@ class Selector:
         Returns:
             DataFrame
         """
-        before = len(self.features)
+        before = len(self._features)
 
         if not ignore:
             ignore = []
         elif isinstance(ignore, str):
             ignore = [ignore]
 
-        feats = [feat for feat in self.features if feat not in ignore]
+        feats = [feat for feat in self._features if feat not in ignore]
 
         # Training once and removing all features would remove the
         # described and describing features at the same time.
@@ -568,7 +581,7 @@ class Selector:
 
         selected = feats[:]  # Copy
 
-        depend = self.dependence(self.x[selected + ignore])["Dependence"]
+        depend = self.dependence(self._x[selected + ignore])["Dependence"]
 
         for feat in reversed(feats):
 
@@ -580,21 +593,21 @@ class Selector:
                 # is no need to recalculate.
 
                 if not feat == feats[0]:
-                    depend = self.dependence(self.x[selected + ignore])[
+                    depend = self.dependence(self._x[selected + ignore])[
                         "Dependence"
                     ]
 
-        self.x = self.x[selected]
-        self.features = selected
+        self._x = self._x[selected]
+        self._features = selected
 
-        after = len(self.features)
+        after = len(self._features)
         if verbose:
             print(
                 f"Dropped {before - after} features with dependence from "
                 f"multiple other features greater than {threshold}"
             )
 
-        return self.x
+        return self._x
 
     @staticmethod
     def _manage_groups(
@@ -640,7 +653,7 @@ class Selector:
         data[random_feat_name] = np.random.random(size=data.shape[0])
         return data, random_feat_name
 
-    def importances(
+    def eval_importances(
         self,
         x: pd.DataFrame,
         y: pd.Series,
@@ -650,7 +663,7 @@ class Selector:
         n_jobs: int = 1,
     ) -> pd.DataFrame:
         """
-        Permutation feature importances.
+        Evaluate permutation feature importances.
 
         Args:
             x: Features dataframe.
@@ -731,19 +744,19 @@ class Selector:
         Returns:
             DataFrame
         """
-        before = len(self.features)
+        before = len(self._features)
 
         # We'll add a column to the dataframe, so it is a good a idea
         # copy to a new object and avoid inplace transformations.
-        x = self.x.copy()
-        y = self.y.copy()
+        x = self._x.copy()
+        y = self._y.copy()
 
         # Add a random column. Any feature less important than this will
         # be considered useless.
         x, rnd_feat_name = self._add_random_feature(x)
 
         # Get importances
-        imp = self.importances(x, y, task, groups, n_times, n_jobs)
+        imp = self.eval_importances(x, y, task, groups, n_times, n_jobs)
 
         # Remove useless features.
         rnd_feat_imp = imp.loc[rnd_feat_name]["Importance"]
@@ -753,23 +766,23 @@ class Selector:
         # Keeps the feature where the threshold occurs, and remove from
         # the next on.
         idx = np.searchsorted(imp["Cumulative Importance"], threshold)
-        remove = imp["Cumulative Importance"][idx + 1 :].index
+        remove = imp["Cumulative Importance"][idx + 1:].index
 
         if ignore:
             remove = [rm for rm in remove if rm not in ignore]
 
         keep = [i for i in imp.index if i not in remove]
-        self.x = self.x[keep]
-        self.features = list(self.x.columns)
+        self._x = self._x[keep]
+        self._features = list(self._x.columns)
 
-        after = len(self.features)
+        after = len(self._features)
         if verbose:
             print(
                 f"Dropped {before - after} features with cumulative importance "
                 f"greater than {threshold}"
             )
 
-        return self.x
+        return self._x
 
     def select(
         self,
@@ -784,7 +797,7 @@ class Selector:
     ) -> pd.DataFrame:
         """ Automatically select features. """
 
-        before = len(self.features)
+        before = len(self._features)
 
         if max_na_ratio is not None:
             self.drop_na(threshold=max_na_ratio, ignore=ignore, verbose=verbose)
@@ -816,7 +829,7 @@ class Selector:
                 verbose=verbose,
             )
 
-        after = len(self.features)
+        after = len(self._features)
         if verbose:
             print(
                 f"Dropped a total of {before - after} features",
@@ -824,4 +837,4 @@ class Selector:
                 sep="\n",
             )
 
-        return self.x
+        return self._x
