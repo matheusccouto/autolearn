@@ -1,0 +1,77 @@
+# Please use following pattern:
+
+# For fixed values use:
+# kwarg: value
+
+# For ranges use:
+# kwarg:
+#   optuna.trial method name without "suggest_":
+#     optuna.trial method kwarg: value.
+
+# For a complete list of optuna.trial methods see:
+# https://optuna.readthedocs.io/en/latest/reference/trial.html
+
+n_estimators:
+  int:
+    low: 10
+    high: 100
+max_depth:
+  int:
+    low: 1
+    high: 10
+    step: 1
+learning_rate:
+  float:
+    low: 0.001
+    high: 1
+    log: true
+gamma:
+  float:
+    low: 0.001
+    high: 1000
+    log: true
+min_child_weight:
+  int:
+    low: 0
+    high: 10
+    step: 1
+max_delta_step:
+  int:
+    low: 0
+    high: 10
+    step: 1
+subsample:
+  float:
+    low: 0
+    high: 1
+    log: false
+colsample_bytree:
+  float:
+    low: 0
+    high: 1
+    log: false
+colsample_bylevel:
+  float:
+    low: 0
+    high: 1
+    log: false
+colsample_bynode:
+  float:
+    low: 0
+    high: 1
+    log: false
+reg_alpha:
+  float:
+    low: 0.001
+    high: 1000
+    log: false
+reg_lambda:
+  float:
+    low: 0.001
+    high: 1000
+    log: false
+scale_pos_weight:
+  float:
+    low: 0
+    high: 1
+    log: false
