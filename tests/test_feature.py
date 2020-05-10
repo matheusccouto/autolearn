@@ -24,7 +24,7 @@ class TestLoad:
 
     def test_export_files(self):
         """ Test if files are exported accordingly. """
-        feat = feature.Creator(data, features, target)
+        feat = feature.Creator(data, target, features)
         feat.create(
             trans_primitives=["greater_than"],
             entity_set_folder_name="entityset",

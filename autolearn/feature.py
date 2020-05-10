@@ -45,14 +45,19 @@ class Creator:
     ]
 
     def __init__(
-        self, data: pd.DataFrame, features: Sequence[str], target: str,
+        self,
+        data: pd.DataFrame,
+        target: str,
+        features: Optional[Sequence[str]] = None,
     ):
         """
         Args:
             data: DataFrame.
-            features: Features.
             target: Target.
+            features: Features.
         """
+        if features is None:
+            features = data.columns
         self.original_features = features
         self.features = features
         self.target = target
@@ -750,7 +755,7 @@ class Selector:
         # Keeps the feature where the threshold occurs, and remove from
         # the next on.
         idx = np.searchsorted(imp["Cumulative Importance"], threshold)
-        remove = imp["Cumulative Importance"][idx + 1:].index
+        remove = imp["Cumulative Importance"][idx + 1 :].index
 
         if ignore:
             remove = [rm for rm in remove if rm not in ignore]

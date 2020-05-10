@@ -22,7 +22,7 @@ class TestCreatorInit:
 
     @classmethod
     def setup_class(cls):
-        cls.feat = feature.Creator(data, features, target)
+        cls.feat = feature.Creator(data, target, features)
 
     def test_init_x(self):
         """ Test if features are correctly split. """
@@ -38,7 +38,7 @@ class TestGroupManagement:
 
     @classmethod
     def setup_class(cls):
-        cls.feat = feature.Creator(data, features, target)
+        cls.feat = feature.Creator(data, target, features)
 
     def test_set_group(self):
         """ Test _set_group method. """
@@ -79,7 +79,7 @@ class TestEntitySet:
 
     @classmethod
     def setup_class(cls):
-        cls.feat = feature.Creator(data, features, target)
+        cls.feat = feature.Creator(data, target, features)
 
     def test_index_name(self):
         """ Test get index name when name is not None. """
@@ -112,7 +112,7 @@ class TestCreate:
 
     def test_create(self):
         """ Test creating variables. """
-        feat = feature.Creator(data, features, target)
+        feat = feature.Creator(data, target, features)
         old_n_cols = len(feat.x.columns)
         feat.create()
         new_n_cols = len(feat.x.columns)
@@ -120,22 +120,22 @@ class TestCreate:
 
     def test_custom_trans_primitives(self):
         """ Test changing the default trans primitives. """
-        feat = feature.Creator(data, features, target)
+        feat = feature.Creator(data, target, features)
         feat.create(trans_primitives=["add_numeric"])
         custom_n_cols = len(feat.x.columns)
 
-        feat = feature.Creator(data, features, target)
+        feat = feature.Creator(data, target, features)
         feat.create(trans_primitives=None)
         default_n_cols = len(feat.x.columns)
         assert default_n_cols > custom_n_cols
 
     def test_custom_max_depth(self):
         """ Test changing the default trans primitives. """
-        feat = feature.Creator(data, features, target)
+        feat = feature.Creator(data, target, features)
         feat.create(trans_primitives=["greater_than", "and"], max_depth=1)
         depth1_n_cols = len(feat.x.columns)
 
-        feat = feature.Creator(data, features, target)
+        feat = feature.Creator(data, target, features)
         feat.create(trans_primitives=["greater_than", "and"], max_depth=2)
         depth2_n_cols = len(feat.x.columns)
 
@@ -143,7 +143,7 @@ class TestCreate:
 
     def test_export_files(self):
         """ Test if files are exported accordingly. """
-        feat = feature.Creator(data, features, target)
+        feat = feature.Creator(data, target, features)
         feat.create(
             trans_primitives=["greater_than"],
             entity_set_folder_name="entityset",
@@ -153,14 +153,14 @@ class TestCreate:
 
     def test_not_single_value(self):
         """ Test that no single values features are created. """
-        feat = feature.Creator(data, features, target)
+        feat = feature.Creator(data, target, features)
         feat.create(trans_primitives=["greater_than"])
         uniques_count = [len(feat.x[col].unique()) for col in feat.x.columns]
         assert 1 not in uniques_count
 
     def test_not_all_nan(self):
         """ Test that no NA features are created. """
-        feat = feature.Creator(data, features, target)
+        feat = feature.Creator(data, target, features)
         feat.create(trans_primitives=["greater_than"])
         before = len(feat.x.columns)
         after = len(feat.x.dropna(1, how="all").columns)
