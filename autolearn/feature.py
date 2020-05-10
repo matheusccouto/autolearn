@@ -55,17 +55,17 @@ class _Operator:
         self._y = data[target]
 
     @property
-    def data(self):
+    def data(self) -> pd.DataFrame:
         """ Get data (features + target). """
         return self._x.join(self._y)
 
     @property
-    def features(self):
+    def features(self) -> Sequence:
         """ Get features names. """
         return list(self._features)
 
     @property
-    def target(self):
+    def target(self) -> Sequence:
         """ Get target name. """
         return list(self._target)
 
