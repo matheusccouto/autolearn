@@ -101,19 +101,19 @@ class _Objective:
             random_state: Seed used by random number generator.
             n_jobs: Number of CPUs to use. -1 to use all available.
         """
-        self.x = x
-        self.y = y
-        self.model = model
-        self.params = params
-        self.scorer = scorer
+        self._x = x
+        self._y = y
+        self._model = model
+        self._params = params
+        self._scorer = scorer
         if test_ratio or test_samples:
             cv = None
-        self.cv = cv
-        self.test_samples = test_samples
-        self.test_ratio = test_ratio
-        self.time_series = time_series
-        self.random_state = random_state
-        self.n_jobs = n_jobs
+        self._cv = cv
+        self._test_samples = test_samples
+        self._test_ratio = test_ratio
+        self._time_series = time_series
+        self._random_state = random_state
+        self._n_jobs = n_jobs
 
     @staticmethod
     def _cross_validate(
@@ -210,30 +210,30 @@ class _Objective:
         Returns:
             Trial score.
         """
-        params = self._eval_params(trial, self.params)
-        model = self.model(**params)
+        params = self._eval_params(trial, self._params)
+        model = self._model(**params)
 
-        if self.cv:
+        if self._cv:
             return self._cross_validate(
-                x=self.x,
-                y=self.y,
+                x=self._x,
+                y=self._y,
                 model=model,
-                scorer=self.scorer,
-                cv=self.cv,
-                time_series=self.time_series,
-                random_state=self.random_state,
-                n_jobs=self.n_jobs,
+                scorer=self._scorer,
+                cv=self._cv,
+                time_series=self._time_series,
+                random_state=self._random_state,
+                n_jobs=self._n_jobs,
             )
         else:
             return self._train_test(
-                x=self.x,
-                y=self.y,
+                x=self._x,
+                y=self._y,
                 model=model,
-                scorer=self.scorer,
-                test_samples=self.test_samples,
-                test_ratio=self.test_ratio,
-                time_series=self.time_series,
-                random_state=self.random_state,
+                scorer=self._scorer,
+                test_samples=self._test_samples,
+                test_ratio=self._test_ratio,
+                time_series=self._time_series,
+                random_state=self._random_state,
             )
 
 
