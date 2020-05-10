@@ -32,7 +32,7 @@ def load(
 
 
 class _Operator:
-    """ Base class for operations with feature. """
+    """ Base class for feature operation. """
 
     def __init__(
         self,
@@ -68,6 +68,157 @@ class _Operator:
     def target(self) -> Sequence:
         """ Get target name. """
         return list(self._target)
+
+
+class _Evaluator(_Operator):
+    """ Base class for feature evaluation. """
+
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        target: str,
+        features: Optional[Sequence[str]] = None,
+    ):
+        super().__init__(data=data, target=target, features=features)
+        self._importances = None
+        self._dependence = None
+
+    @property
+    def importance(self):
+        """ Get features importance dataframe. """
+        if self._importances is None:
+            raise AttributeError("Features importance are not yet available.")
+        return self._importances
+
+    @property
+    def dependence(self):
+        """ Get features dependence dataframe. """
+        if self._dependence is None:
+            raise AttributeError("Features dependence are not yet available.")
+        return self._dependence
+
+    @staticmethod
+    def _manage_groups(
+        groups: Dict[str, Sequence[str]], features: Sequence[str]
+    ) -> Sequence[Sequence[str]]:
+        """
+        Transforms a dict of related features into a nested list for the
+        the rfpimp.importance method.
+
+        Args:
+            groups: Dictionary of related features.
+            features: All features to be considered.
+
+        Returns:
+            Nested list.
+        """
+        # Transforms the dictionary in a list of lists. That is the
+        # format for the rfpimp.importance.
+        nested = [values for values in groups.values()]
+
+        # Flat the nested list and check which features were forgotten.
+        flat = list(utils.flatten(nested))
+        forgotten = [[feat] for feat in features if feat not in flat]
+
+        # Return a feature list containing
+        return nested + forgotten
+
+    @staticmethod
+    def _add_random_feature(data: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
+        """
+        Add a feature of random values to a dataframe.
+
+        Args:
+            data: DataFrame
+
+        Returns:
+            Tuple with DataFrame and name of the random column.
+        """
+        random_feat_name = "random"
+        while random_feat_name in data.columns:
+            random_feat_name += "_"
+
+        data[random_feat_name] = np.random.random(size=data.shape[0])
+        return data, random_feat_name
+
+    def eval_importance(
+        self,
+        x: pd.DataFrame,
+        y: pd.Series,
+        task: str = "regression",
+        groups: Optional[Dict[str, Sequence[str]]] = None,
+        n_times: int = 3,
+        n_jobs: int = 1,
+    ) -> pd.DataFrame:
+        """
+        Evaluate permutation feature importances.
+
+        Args:
+            x: Features dataframe.
+            y: Target series.
+            task: Learning task. "regression" or "classification"
+            groups: Groups of related features. One feature can appear
+                on several groups at the same time.
+            n_times: Number of times to calculate importances. Uses the
+                mean of results.
+            n_jobs: Number of CPUs to use. -1 to use all available.
+
+        Returns:
+            DataFrame
+        """
+        # Prepare features list (os nested list).
+        features = x.columns
+        if groups:
+            features = self._manage_groups(groups, features)
+
+        # Split dataset.
+        n_samples = 5000
+        ratio = 0.2
+        datasets = autolearn.split(
+            x=x, y=y, test_samples=n_samples, test_ratio=ratio
+        )
+        x_train, x_test, y_train, y_test = datasets
+
+        model = autolearn.Model(task)
+        model.tune(x_train, y_train, test_ratio=ratio, n_jobs=n_jobs)
+        model.fit(x_train, y_train)
+
+        kwargs = {
+            "model": model,
+            "X_valid": x_test,
+            "y_valid": y_test,
+            "features": features,
+            "n_samples": -1,
+        }
+
+        # Get importances.
+        imps = [rfpimp.importances(**kwargs) for _ in range(n_times)]
+        imp = pd.concat(imps).groupby(level=0).mean()
+        imp = imp.sort_values("Importance", ascending=False)
+
+        # Create new columns.
+        # Handle Negative values by adding its module to all values.
+        non_negatives = imp["Importance"].add(np.abs(imp["Importance"].min()))
+        imp["Normalised Importance"] = non_negatives / non_negatives.sum()
+        imp["Cumulative Importance"] = imp["Normalised Importance"].cumsum()
+
+        self._importances = imp
+        return imp
+
+    @staticmethod
+    def eval_dependence(x: pd.DataFrame) -> pd.DataFrame:
+        """
+        Feature dependence matrix.
+
+        Identify if a feature is dependent on other features.
+
+        Args:
+            x: Train data.
+
+        Returns:
+            Feature dependence dataframe.
+        """
+        return rfpimp.feature_dependence_matrix(x)
 
 
 class Creator(_Operator):
@@ -329,24 +480,8 @@ class Creator(_Operator):
         return self._x
 
 
-class Selector(_Operator):
+class Selector(_Evaluator):
     """ Automated feature selection. """
-
-    def __init__(
-        self,
-        data: pd.DataFrame,
-        target: str,
-        features: Optional[Sequence[str]] = None,
-    ):
-        super().__init__(data=data, target=target, features=features)
-        self._importances = None
-
-    @property
-    def importances(self):
-        """ Get features importance dataframe. """
-        if self._importances is None:
-            raise AttributeError("Features importances are not yet available.")
-        return self._importances
 
     def drop_na(
         self,
@@ -484,21 +619,6 @@ class Selector(_Operator):
 
         return self._x
 
-    @staticmethod
-    def dependence(x: pd.DataFrame) -> pd.DataFrame:
-        """
-        Feature dependence matrix.
-
-        Identify if a feature is dependent on other features.
-
-        Args:
-            x: Train data.
-
-        Returns:
-            Feature dependence dataframe.
-        """
-        return rfpimp.feature_dependence_matrix(x)
-
     def drop_single_dependence(
         self,
         threshold: float = 0.95,
@@ -519,7 +639,7 @@ class Selector(_Operator):
         """
         before = len(self._features)
 
-        matrix = self.dependence(self._x)
+        matrix = self.eval_dependence(self._x)
         matrix = matrix.drop("Dependence", axis=1)
         np.fill_diagonal(matrix.values, val=0)  # Inplace
 
@@ -583,7 +703,7 @@ class Selector(_Operator):
 
         selected = feats[:]  # Copy
 
-        depend = self.dependence(self._x[selected + ignore])["Dependence"]
+        depend = self.eval_dependence(self._x[selected + ignore])["Dependence"]
 
         for feat in reversed(feats):
 
@@ -595,7 +715,7 @@ class Selector(_Operator):
                 # is no need to recalculate.
 
                 if not feat == feats[0]:
-                    depend = self.dependence(self._x[selected + ignore])[
+                    depend = self.eval_dependence(self._x[selected + ignore])[
                         "Dependence"
                     ]
 
@@ -610,114 +730,6 @@ class Selector(_Operator):
             )
 
         return self._x
-
-    @staticmethod
-    def _manage_groups(
-        groups: Dict[str, Sequence[str]], features: Sequence[str]
-    ) -> Sequence[Sequence[str]]:
-        """
-        Transforms a dict of related features into a nested list for the
-        the rfpimp.importance method.
-
-        Args:
-            groups: Dictionary of related features.
-            features: All features to be considered.
-
-        Returns:
-            Nested list.
-        """
-        # Transforms the dictionary in a list of lists. That is the
-        # format for the rfpimp.importance.
-        nested = [values for values in groups.values()]
-
-        # Flat the nested list and check which features were forgotten.
-        flat = list(utils.flatten(nested))
-        forgotten = [[feat] for feat in features if feat not in flat]
-
-        # Return a feature list containing
-        return nested + forgotten
-
-    @staticmethod
-    def _add_random_feature(data: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
-        """
-        Add a feature of random values to a dataframe.
-
-        Args:
-            data: DataFrame
-
-        Returns:
-            Tuple with DataFrame and name of the random column.
-        """
-        random_feat_name = "random"
-        while random_feat_name in data.columns:
-            random_feat_name += "_"
-
-        data[random_feat_name] = np.random.random(size=data.shape[0])
-        return data, random_feat_name
-
-    def eval_importances(
-        self,
-        x: pd.DataFrame,
-        y: pd.Series,
-        task: str = "regression",
-        groups: Optional[Dict[str, Sequence[str]]] = None,
-        n_times: int = 1,
-        n_jobs: int = 1,
-    ) -> pd.DataFrame:
-        """
-        Evaluate permutation feature importances.
-
-        Args:
-            x: Features dataframe.
-            y: Target series.
-            task: Learning task. "regression" or "classification"
-            groups: Groups of related features. One feature can appear
-                on several groups at the same time.
-            n_times: Number of times to calculate importances. Uses the
-                mean of results.
-            n_jobs: Number of CPUs to use. -1 to use all available.
-
-        Returns:
-            DataFrame
-        """
-        # Prepare features list (os nested list).
-        features = x.columns
-        if groups:
-            features = self._manage_groups(groups, features)
-
-        # Split dataset.
-        n_samples = 5000
-        ratio = 0.2
-        datasets = autolearn.split(
-            x=x, y=y, test_samples=n_samples, test_ratio=ratio
-        )
-        x_train, x_test, y_train, y_test = datasets
-
-        model = autolearn.Model(task)
-        model.tune(x_train, y_train, test_ratio=ratio, n_jobs=n_jobs)
-        model.fit(x_train, y_train)
-
-        kwargs = {
-            "model": model,
-            "X_valid": x_test,
-            "y_valid": y_test,
-            "features": features,
-            "n_samples": -1,
-        }
-
-        # Get importances.
-        imps = [rfpimp.importances(**kwargs) for _ in range(n_times)]
-        imp = pd.concat(imps).groupby(level=0).mean()
-        imp = imp.sort_values("Importance", ascending=False)
-
-        # Create new columns.
-        # Handle Negative values by adding its module to all values.
-        non_negatives = imp["Importance"].add(np.abs(imp["Importance"].min()))
-        imp["Normalised Importance"] = non_negatives / non_negatives.sum()
-        imp["Cumulative Importance"] = imp["Normalised Importance"].cumsum()
-
-        self._importances = imp
-        return imp
 
     def drop_low_importance(
         self,
@@ -758,7 +770,7 @@ class Selector(_Operator):
         x, rnd_feat_name = self._add_random_feature(x)
 
         # Get importances
-        imp = self.eval_importances(x, y, task, groups, n_times, n_jobs)
+        imp = self.eval_importance(x, y, task, groups, n_times, n_jobs)
 
         # Remove useless features.
         rnd_feat_imp = imp.loc[rnd_feat_name]["Importance"]
@@ -768,7 +780,7 @@ class Selector(_Operator):
         # Keeps the feature where the threshold occurs, and remove from
         # the next on.
         idx = np.searchsorted(imp["Cumulative Importance"], threshold)
-        remove = imp["Cumulative Importance"][idx + 1:].index
+        remove = imp["Cumulative Importance"][idx + 1 :].index
 
         if ignore:
             remove = [rm for rm in remove if rm not in ignore]
@@ -840,3 +852,7 @@ class Selector(_Operator):
             )
 
         return self._x
+
+
+class Engineer(_Operator):
+    pass  # TODO Continue Here
