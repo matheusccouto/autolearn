@@ -58,7 +58,6 @@ class Creator:
         """
         if features is None:
             features = data.columns
-        self.original_features = features
         self.features = features
         self.target = target
 
@@ -322,11 +321,10 @@ class Selector:
         Args:
             data: DataFrame.
             target: Target feature name.
-            features: Features name sequence..
+            features: Features name sequence.
         """
         if features is None:
             features = data.columns
-        self.original_features = features
         self.features = features
         self.target = target
 
