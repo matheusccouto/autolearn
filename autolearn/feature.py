@@ -224,7 +224,7 @@ class Creator(_Operator):
         entity_set_folder_name: str = "entityset",
         features_file_name: str = "features.json",
         n_workers: int = 1,
-        verbose: bool = False,
+        verbose: bool = True,
     ) -> pd.DataFrame:
         """
         Create new features.
