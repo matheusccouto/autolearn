@@ -51,8 +51,8 @@ class _Operator:
         self._features = [feat for feat in features if feat not in target]
         self._target = target
 
-        self._x = data[features]
-        self._y = data[target]
+        self._x = data[self._features]
+        self._y = data[self._target]
 
     @property
     def data(self) -> pd.DataFrame:
@@ -221,8 +221,8 @@ class Creator(_Operator):
         trans_primitives: Optional[Sequence[str]] = None,
         use_forgotten: bool = False,
         max_depth: int = 1,
-        entity_set_folder_name: str = "entityset",
-        features_file_name: str = "features.json",
+        entity_set_folder_name: Optional[str] = None,
+        features_file_name: Optional[str] = None,
         n_workers: int = 1,
         verbose: bool = True,
     ) -> pd.DataFrame:
@@ -260,9 +260,9 @@ class Creator(_Operator):
             max_depth: Number of iterations in the feature creation
                 process. (default: 1)
             entity_set_folder_name: Folder name to store entity set with
-                created features. (default: "entityset")
+                created features. (default: None)
             features_file_name: File name to store created features
-                names. Must be JSON. (default: "features.json")
+                names. Must be JSON. (default: None)
             n_workers: Number of parallel workers. (default: 1)
             verbose: Verbosity. (default: False)
 
@@ -316,8 +316,10 @@ class Creator(_Operator):
         self._features = [feature._name for feature in features]
 
         # Export params.
-        es.to_csv(entity_set_folder_name)
-        ft.save_features(features, features_file_name)
+        if entity_set_folder_name:
+            es.to_csv(entity_set_folder_name)
+        if features_file_name:
+            ft.save_features(features, features_file_name)
 
         # Compare number of features.
         n_new_features = self._x.shape[1] - old_n_features
@@ -659,7 +661,7 @@ class Selector(_Operator):
         y: pd.Series,
         task: str = "regression",
         groups: Optional[Dict[str, Sequence[str]]] = None,
-        n_times: int = 10,
+        n_times: int = 1,
         n_jobs: int = 1,
     ) -> pd.DataFrame:
         """
