@@ -48,7 +48,7 @@ class _Operator:
         """
         if features is None:
             features = data.columns
-        self._features = features
+        self._features = [feat for feat in features if feat not in target]
         self._target = target
 
         self._x = data[features]
