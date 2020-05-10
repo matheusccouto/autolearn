@@ -248,19 +248,52 @@ class Model:
                 * "time series regression"
                 * "binary classification"
                 * "time series binary classification
+            verbose: Verbosity.
         """
-        self.task = self._validate_task(task)
-        self.estimator = xgb.XGBModel
-        self.time_series = "time series" in task
+        self._task = self._validate_task(task)
+        self._estimator = xgb.XGBModel
+        self._time_series = "time series" in task
 
-        self.params = {}
-        self.model = self.estimator()
-        self.scorer = self._get_scorer(self.task)
+        self._params = {}
+        self._model = self._estimator()
+        self._scorer = self._get_scorer(self._task)
 
         if verbose:
             optuna.logging.set_verbosity(optuna.logging.ERROR)
         else:
             optuna.logging.set_verbosity(optuna.logging.INFO)
+
+    @property
+    def task(self) -> str:
+        """ Get or set learning task. """
+        return self._task
+
+    @task.setter
+    def task(self, value: str):
+        self._task = self._validate_task(value)
+        self._scorer = self._get_scorer(self._task)
+
+    @property
+    def time_series(self) -> bool:
+        """ Get or set if learning task is a time series. """
+        return self._time_series
+
+    @time_series.setter
+    def time_series(self, value: bool):
+        self._time_series = value
+
+    @property
+    def params(self) -> Dict[str, Any]:
+        """ Get or set XGBModel parameters. """
+        if not self._params:
+            raise AttributeError("Parameters are not available yet.")
+        return self._params
+
+    # TODO Params validation.
+    # TODO Read yml
+    @params.setter
+    def params(self, value: Dict[str, Any]):
+        self._params = value
 
     @staticmethod
     def _validate_task(task: str) -> str:
@@ -370,33 +403,33 @@ class Model:
         Returns:
             Dict with best hyperparameters.
         """
-        params = self._get_params_ranges(self.task)
+        params = self._get_params_ranges(self._task)
         # For tuning we'll use tree_method="hist" because it is faster.
         params.update({"tree_method": "hist"})
 
         objective = _Objective(
             x=x,
             y=y,
-            model=self.estimator,
+            model=self._estimator,
             params=params,
-            scorer=self.scorer,
+            scorer=self._scorer,
             cv=cv,
             test_samples=test_samples,
             test_ratio=test_ratio,
-            time_series=self.time_series,
+            time_series=self._time_series,
             random_state=random_state,
             n_jobs=1,
         )
         study = optuna.create_study(direction="maximize")
         study.optimize(objective, n_trials=n_trials, n_jobs=n_jobs)
-        self.params = study.best_params
-        self.model = self.estimator(**self.params)
+        self._params = study.best_params
+        self._model = self._estimator(**self._params)
 
     def set_params(self):
         raise NotImplementedError
 
     def fit(self, x: pd.DataFrame, y: pd.Series, *args, **kwargs):
-        self.model.fit(x, y, *args, **kwargs)
+        self._model.fit(x, y, *args, **kwargs)
 
     def score(self, x: pd.DataFrame, y: pd.Series, *args, **kwargs):
-        return self.scorer(self.model, x, y, *args, **kwargs)
+        return self._scorer(self._model, x, y, *args, **kwargs)
