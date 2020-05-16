@@ -171,10 +171,13 @@ class _Evaluator(_Operator):
         return data, random_feat_name
 
     # TODO Add CV option
-    def eval_importance(self, groups: Optional[Dict[str, Sequence[str]]] = None,
-                        n_times: int = 10,
-                        ignore: Optional[Union[str, Sequence[str]]] = None,
-                        n_jobs: int = 1) -> pd.DataFrame:
+    def eval_importance(
+        self,
+        groups: Optional[Dict[str, Sequence[str]]] = None,
+        n_times: int = 10,
+        ignore: Optional[Union[str, Sequence[str]]] = None,
+        n_jobs: int = 1,
+    ) -> pd.DataFrame:
         """
         Evaluate permutation feature importances.
 
@@ -231,7 +234,9 @@ class _Evaluator(_Operator):
         return imp
 
     # TODO Add CV option
-    def eval_dependence(self, ignore: Optional[Union[str, Sequence[str]]] = None) -> pd.DataFrame:
+    def eval_dependence(
+        self, ignore: Optional[Union[str, Sequence[str]]] = None
+    ) -> pd.DataFrame:
         """
         Evaluate feature dependence matrix.
 
@@ -749,9 +754,7 @@ class Selector(_Evaluator):
                 # is no need to recalculate.
 
                 if not feat == feats[0]:
-                    depend = self.eval_dependence(ignore)[
-                        "Dependence"
-                    ]
+                    depend = self.eval_dependence(ignore)["Dependence"]
 
         self._x = self._x[selected]
         self._features = selected
@@ -808,7 +811,7 @@ class Selector(_Evaluator):
         # Keeps the feature where the threshold occurs, and remove from
         # the next on.
         idx = np.searchsorted(imp["Cumulative Importance"], threshold)
-        remove = imp["Cumulative Importance"][idx + 1:].index
+        remove = imp["Cumulative Importance"][idx + 1 :].index
 
         if ignore:
             remove = [rm for rm in remove if rm not in ignore]
