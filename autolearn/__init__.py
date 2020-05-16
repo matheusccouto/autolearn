@@ -250,7 +250,7 @@ class Model:
                 * "time series binary classification
             verbose: Verbosity.
         """
-        self._task = self._validate_task(task)
+        self._task = task
         self._estimator = xgb.XGBModel
         self._time_series = "time series" in task
 

@@ -11,6 +11,7 @@ features = boston.feature_names
 target = "MEDV"
 data = pd.DataFrame(boston.data, columns=boston.feature_names)
 data[target] = boston.target
+task = "regression"
 
 
 class TestSelectorInit:
@@ -140,7 +141,7 @@ class TestDropLowImportance:
         """ Test dropping features. """
         feat = feature.Selector(self.data, target)
         before = feat._x.shape[1]
-        feat.drop_low_importance(task="regression", threshold=0.95, n_times=1)
+        feat.drop_low_importance(threshold=0.95, n_times=1)
         after = feat._x.shape[1]
         assert before > after
 
@@ -208,10 +209,10 @@ class TestSelect:
 
     @classmethod
     def setup_class(cls):
-        cls.feat = feature.Selector(data, target, features)
+        cls.feat = feature.Selector(data, target, features, task)
 
     def test_select(self):
         before = self.feat._x.shape[1]
-        self.feat.select(task="regression")
+        self.feat.transform()
         after = self.feat._x.shape[1]
         assert before > after

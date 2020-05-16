@@ -5,6 +5,7 @@ from typing import Union, Dict, Sequence, Optional, Tuple
 import featuretools as ft
 import numpy as np
 import pandas as pd
+import sklearn
 from featuretools import selection
 
 import autolearn
@@ -39,35 +40,61 @@ class _Operator:
         data: pd.DataFrame,
         target: str,
         features: Optional[Sequence[str]] = None,
+        task: str = "regression",
     ):
         """
         Args:
             data: DataFrame (features + target).
             target: Target feature name.
             features: Features name sequence.
+            task: Learning task. "regression" or "classification"
         """
         if features is None:
             features = data.columns
         self._features = [feat for feat in features if feat not in target]
         self._target = target
 
-        self._x = data[self._features]
+        self._x = data.drop(self._target, axis=1)
         self._y = data[self._target]
+
+        self._task = task
 
     @property
     def data(self) -> pd.DataFrame:
-        """ Get data (features + target). """
+        """ Get or set data (features + target). """
         return self._x.join(self._y)
+
+    @data.setter
+    def data(self, value: pd.DataFrame):
+        self._x = value.drop(self._target, axis=1)
+        self._y = value[self._target]
 
     @property
     def features(self) -> Sequence:
-        """ Get features names. """
-        return list(self._features)
+        """ Get or set features names. """
+        return self._features
+
+    @features.setter
+    def features(self, value: Sequence):
+        self._features = [feat for feat in value if feat not in self._target]
 
     @property
-    def target(self) -> Sequence:
-        """ Get target name. """
-        return list(self._target)
+    def target(self) -> str:
+        """ Get or set target name. """
+        return self._target
+
+    @target.setter
+    def target(self, value: str):
+        self._target = value
+
+    @property
+    def task(self) -> str:
+        """ Get or set learning task. """
+        return self._task
+
+    @task.setter
+    def task(self, value: str):
+        self._task = value
 
 
 class _Evaluator(_Operator):
@@ -78,8 +105,9 @@ class _Evaluator(_Operator):
         data: pd.DataFrame,
         target: str,
         features: Optional[Sequence[str]] = None,
+        task: str = "regression",
     ):
-        super().__init__(data=data, target=target, features=features)
+        super().__init__(data=data, target=target, features=features, task=task)
         self._importances = None
         self._dependence = None
 
@@ -141,13 +169,14 @@ class _Evaluator(_Operator):
         data[random_feat_name] = np.random.random(size=data.shape[0])
         return data, random_feat_name
 
+    # TODO Use x and y stored in instance.
+    # TODO Add CV option
     def eval_importance(
         self,
         x: pd.DataFrame,
         y: pd.Series,
-        task: str = "regression",
         groups: Optional[Dict[str, Sequence[str]]] = None,
-        n_times: int = 3,
+        n_times: int = 10,
         n_jobs: int = 1,
     ) -> pd.DataFrame:
         """
@@ -156,7 +185,6 @@ class _Evaluator(_Operator):
         Args:
             x: Features dataframe.
             y: Target series.
-            task: Learning task. "regression" or "classification"
             groups: Groups of related features. One feature can appear
                 on several groups at the same time.
             n_times: Number of times to calculate importances. Uses the
@@ -179,7 +207,7 @@ class _Evaluator(_Operator):
         )
         x_train, x_test, y_train, y_test = datasets
 
-        model = autolearn.Model(task)
+        model = autolearn.Model(task=self.task)
         model.tune(x_train, y_train, test_ratio=ratio, n_jobs=n_jobs)
         model.fit(x_train, y_train)
 
@@ -205,10 +233,11 @@ class _Evaluator(_Operator):
         self._importances = imp
         return imp
 
+    # TODO Remove arg and use x stored in instance.
     @staticmethod
     def eval_dependence(x: pd.DataFrame) -> pd.DataFrame:
         """
-        Feature dependence matrix.
+        Evaluate feature dependence matrix.
 
         Identify if a feature is dependent on other features.
 
@@ -218,18 +247,20 @@ class _Evaluator(_Operator):
         Returns:
             Feature dependence dataframe.
         """
-        return rfpimp.feature_dependence_matrix(x)
+        model = sklearn.ensemble.RandomForestRegressor(10, oob_score=True)
+        return rfpimp.feature_dependence_matrix(x, rfmodel=model)
 
 
 class Creator(_Operator):
     """ Automated feature creation. """
 
-    TRANS_PRIMITIVES: Sequence[str] = [
+    _TRANS_PRIMITIVES: Sequence[str] = [
         "add_numeric",
         "subtract_numeric",
         "multiply_numeric",
         "divide_numeric",
         "greater_than",
+        "less_than",
         "and",
         "or",
     ]
@@ -366,15 +397,15 @@ class Creator(_Operator):
 
         return es
 
-    def create(
+    def transform(
         self,
         groups: Optional[Dict[str, Sequence[str]]] = None,
-        trans_primitives: Optional[Sequence[str]] = None,
         use_forgotten: bool = False,
+        trans_primitives: Optional[Sequence[str]] = None,
         max_depth: int = 1,
         entity_set_folder_name: Optional[str] = None,
         features_file_name: Optional[str] = None,
-        n_workers: int = 1,
+        n_jobs: int = 1,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """
@@ -387,6 +418,7 @@ class Creator(_Operator):
             - "multiply_numeric"
             - "divide_numeric"
             - "greater_than"
+            - "less_than"
             - "and"
             - "or"
 
@@ -404,17 +436,17 @@ class Creator(_Operator):
         Args:
             groups: Dict of related features groups. None to not use
                 relationships. (default: None)
-            trans_primitives: Featuretools trans primitives to use.
-                None to use default. (default: None)
             use_forgotten: Create a relationship group for the forgotten
                 features in the the arg groups. (default: None)
+            trans_primitives: Featuretools trans primitives to use.
+                None to use default. (default: None)
             max_depth: Number of iterations in the feature creation
                 process. (default: 1)
             entity_set_folder_name: Folder name to store entity set with
                 created features. (default: None)
             features_file_name: File name to store created features
                 names. Must be JSON. (default: None)
-            n_workers: Number of parallel workers. (default: 1)
+            n_jobs: Number of parallel workers. (default: 1)
             verbose: Verbosity. (default: False)
 
         Returns:
@@ -432,7 +464,7 @@ class Creator(_Operator):
         old_n_features = self._x.shape[1]  # For comparing later.
 
         if not trans_primitives:
-            trans_primitives = self.TRANS_PRIMITIVES
+            trans_primitives = self._TRANS_PRIMITIVES
 
         index_name = self._index_name(self._x)
 
@@ -442,8 +474,8 @@ class Creator(_Operator):
             "ignore_variables": {group: [index_name] for group in groups},
             "trans_primitives": trans_primitives,
             "max_depth": max_depth,
-            "n_jobs": n_workers,
-            "verbose": verbose,
+            "n_jobs": n_jobs,
+            "verbose": False,
         }
 
         # Create features for each group.
@@ -664,6 +696,10 @@ class Selector(_Evaluator):
 
         return self._x
 
+    # TODO Instead of running it again, do the same calculations only
+    #  Much faster. Probably there are some mean or agg that he does
+    #  to find multiple dependence. Do the same with the dataset you
+    #  already have.
     def drop_multiple_dependence(
         self,
         threshold: float = 0.95,
@@ -731,13 +767,13 @@ class Selector(_Evaluator):
 
         return self._x
 
+    # TODO Separate and create drop cumulative importance
     def drop_low_importance(
         self,
-        task: str = "regression",
         threshold: float = 0.95,
         groups: Optional[Dict[str, Sequence[str]]] = None,
         ignore: Optional[Union[str, Sequence[str]]] = None,
-        n_times: int = 1,
+        n_times: int = 10,
         n_jobs: int = 1,
         verbose: bool = True,
     ) -> pd.DataFrame:
@@ -745,7 +781,6 @@ class Selector(_Evaluator):
         Drop features above a cumulative importance threshold.
 
         Args:
-            task: Learning task. "regression" or "classification"
             threshold: Cumulative Importance.
             groups: Groups of related features. One feature can appear
                 on several groups at the same time.
@@ -770,7 +805,7 @@ class Selector(_Evaluator):
         x, rnd_feat_name = self._add_random_feature(x)
 
         # Get importances
-        imp = self.eval_importance(x, y, task, groups, n_times, n_jobs)
+        imp = self.eval_importance(x, y, groups, n_times, n_jobs)
 
         # Remove useless features.
         rnd_feat_imp = imp.loc[rnd_feat_name]["Importance"]
@@ -798,15 +833,15 @@ class Selector(_Evaluator):
 
         return self._x
 
-    def select(
+    def transform(
         self,
-        task: str = "regression",
         max_na_ratio: Optional[float] = 0,
         max_correlation: Optional[float] = 0.95,
         max_single_dependence: Optional[float] = 0.95,
         max_multiple_dependence: Optional[float] = 0.95,
         max_cumulative_importance: Optional[float] = 0.95,
         ignore: Optional[Union[str, Sequence[str]]] = None,
+        n_jobs: int = -1,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """ Automatically select features. """
@@ -837,9 +872,9 @@ class Selector(_Evaluator):
 
         if max_cumulative_importance:
             self.drop_low_importance(
-                task=task,
                 threshold=max_cumulative_importance,
                 ignore=ignore,
+                n_jobs=n_jobs,
                 verbose=verbose,
             )
 
@@ -854,5 +889,75 @@ class Selector(_Evaluator):
         return self._x
 
 
-class Engineer(_Operator):
-    pass  # TODO Continue Here
+class Engineer(_Evaluator):
+    """ Automated feature engineering. """
+
+    def transform(
+        self,
+        groups: Optional[Dict[str, Sequence[str]]] = None,
+        use_forgotten: bool = False,
+        trans_primitives: Optional[Sequence[str]] = None,
+        ignore: Optional[Union[str, Sequence[str]]] = None,
+        n_jobs: int = 1,
+        verbose: bool = True,
+    ):
+        """
+        Create and select new features.
+
+        This method do not allow much customization. For better
+        customization please use the classes Creator and Selector
+        separately.
+        """
+        # Clean initial data to avoid an excessive number of features
+        # later. The main goal is to eliminate collinearity.
+        # That is why low importance features are kept. We want to
+        # find out if these low importance features are able to create
+        # important ones.
+
+        selector = Selector(
+            data=self.data,
+            target=self.target,
+            features=self.features,
+            task=self.task,
+        )
+
+        selector.transform(
+            max_multiple_dependence=None,
+            max_cumulative_importance=None,
+            ignore=ignore,
+            n_jobs=n_jobs,
+            verbose=verbose,
+        )
+        data = selector.data
+        features = selector.features
+
+        # Create features
+
+        creator = Creator(
+            data=data, target=self.target, features=features, task=self.task
+        )
+        creator.transform(
+            groups=groups,
+            use_forgotten=use_forgotten,
+            trans_primitives=trans_primitives,
+            n_jobs=n_jobs,
+            verbose=verbose,
+        )
+        data = creator.data
+        features = creator.features
+
+        # Do one final deep selection.
+
+        selector.data = data
+        selector.features = features
+
+        selector.transform(
+            max_single_dependence=None,
+            max_multiple_dependence=None,
+            ignore=ignore,
+            n_jobs=n_jobs,
+            verbose=verbose,
+        )
+
+        self.data = selector.data
+        self.features = selector.features

@@ -115,29 +115,29 @@ class TestCreate:
         """ Test creating variables. """
         feat = feature.Creator(data, target, features)
         old_n_cols = len(feat._x.columns)
-        feat.create()
+        feat.transform()
         new_n_cols = len(feat._x.columns)
         assert new_n_cols > old_n_cols
 
     def test_custom_trans_primitives(self):
         """ Test changing the default trans primitives. """
         feat = feature.Creator(data, target, features)
-        feat.create(trans_primitives=["add_numeric"])
+        feat.transform(trans_primitives=["add_numeric"])
         custom_n_cols = len(feat._x.columns)
 
         feat = feature.Creator(data, target, features)
-        feat.create(trans_primitives=None)
+        feat.transform(trans_primitives=None)
         default_n_cols = len(feat._x.columns)
         assert default_n_cols > custom_n_cols
 
     def test_custom_max_depth(self):
         """ Test changing the default trans primitives. """
         feat = feature.Creator(data, target, features)
-        feat.create(trans_primitives=["greater_than", "and"], max_depth=1)
+        feat.transform(trans_primitives=["greater_than", "and"], max_depth=1)
         depth1_n_cols = len(feat._x.columns)
 
         feat = feature.Creator(data, target, features)
-        feat.create(trans_primitives=["greater_than", "and"], max_depth=2)
+        feat.transform(trans_primitives=["greater_than", "and"], max_depth=2)
         depth2_n_cols = len(feat._x.columns)
 
         assert depth2_n_cols > depth1_n_cols
@@ -145,7 +145,7 @@ class TestCreate:
     def test_export_files(self):
         """ Test if files are exported accordingly. """
         feat = feature.Creator(data, target, features)
-        feat.create(
+        feat.transform(
             trans_primitives=["greater_than"],
             entity_set_folder_name="entityset",
             features_file_name="features.json",
@@ -155,14 +155,14 @@ class TestCreate:
     def test_not_single_value(self):
         """ Test that no single values features are created. """
         feat = feature.Creator(data, target, features)
-        feat.create(trans_primitives=["greater_than"])
+        feat.transform(trans_primitives=["greater_than"])
         uniques_count = [len(feat._x[col].unique()) for col in feat._x.columns]
         assert 1 not in uniques_count
 
     def test_not_all_nan(self):
         """ Test that no NA features are created. """
         feat = feature.Creator(data, target, features)
-        feat.create(trans_primitives=["greater_than"])
+        feat.transform(trans_primitives=["greater_than"])
         before = len(feat._x.columns)
         after = len(feat._x.dropna(1, how="all").columns)
         assert before == after
