@@ -1,3 +1,4 @@
+# TODO: Create function to select feature ignoring some.
 """ Automated feature engineering and selection. """
 
 from typing import Union, Dict, Sequence, Optional, Tuple
@@ -169,33 +170,29 @@ class _Evaluator(_Operator):
         data[random_feat_name] = np.random.random(size=data.shape[0])
         return data, random_feat_name
 
-    # TODO Use x and y stored in instance.
     # TODO Add CV option
-    def eval_importance(
-        self,
-        x: pd.DataFrame,
-        y: pd.Series,
-        groups: Optional[Dict[str, Sequence[str]]] = None,
-        n_times: int = 10,
-        n_jobs: int = 1,
-    ) -> pd.DataFrame:
+    def eval_importance(self, groups: Optional[Dict[str, Sequence[str]]] = None,
+                        n_times: int = 10,
+                        ignore: Optional[Union[str, Sequence[str]]] = None,
+                        n_jobs: int = 1) -> pd.DataFrame:
         """
         Evaluate permutation feature importances.
 
         Args:
-            x: Features dataframe.
-            y: Target series.
             groups: Groups of related features. One feature can appear
                 on several groups at the same time.
             n_times: Number of times to calculate importances. Uses the
                 mean of results.
+            ignore: Features to ignore during dropping.
             n_jobs: Number of CPUs to use. -1 to use all available.
 
         Returns:
             DataFrame
         """
         # Prepare features list (os nested list).
-        features = x.columns
+        features = self._features
+        if ignore:
+            features = [feat for feat in features if feat not in ignore]
         if groups:
             features = self._manage_groups(groups, features)
 
@@ -203,7 +200,7 @@ class _Evaluator(_Operator):
         n_samples = 5000
         ratio = 0.2
         datasets = autolearn.split(
-            x=x, y=y, test_samples=n_samples, test_ratio=ratio
+            x=self._x, y=self._y, test_samples=n_samples, test_ratio=ratio
         )
         x_train, x_test, y_train, y_test = datasets
 
@@ -233,20 +230,24 @@ class _Evaluator(_Operator):
         self._importances = imp
         return imp
 
-    # TODO Remove arg and use x stored in instance.
-    @staticmethod
-    def eval_dependence(x: pd.DataFrame) -> pd.DataFrame:
+    # TODO Add CV option
+    def eval_dependence(self, ignore: Optional[Union[str, Sequence[str]]] = None) -> pd.DataFrame:
         """
         Evaluate feature dependence matrix.
 
         Identify if a feature is dependent on other features.
 
         Args:
-            x: Train data.
+            ignore: Features to ignore during dropping.
 
         Returns:
             Feature dependence dataframe.
         """
+        feats = self._features
+        if ignore:
+            feats = [feat for feat in self._features if feat not in ignore]
+        x = self._x[feats]
+
         model = sklearn.ensemble.RandomForestRegressor(10, oob_score=True)
         return rfpimp.feature_dependence_matrix(x, rfmodel=model)
 
@@ -671,7 +672,7 @@ class Selector(_Evaluator):
         """
         before = len(self._features)
 
-        matrix = self.eval_dependence(self._x)
+        matrix = self.eval_dependence()
         matrix = matrix.drop("Dependence", axis=1)
         np.fill_diagonal(matrix.values, val=0)  # Inplace
 
@@ -723,12 +724,9 @@ class Selector(_Evaluator):
         """
         before = len(self._features)
 
-        if not ignore:
-            ignore = []
-        elif isinstance(ignore, str):
-            ignore = [ignore]
-
-        feats = [feat for feat in self._features if feat not in ignore]
+        feats = self._features
+        if ignore:
+            feats = [feat for feat in feats if feat not in ignore]
 
         # Training once and removing all features would remove the
         # described and describing features at the same time.
@@ -739,7 +737,7 @@ class Selector(_Evaluator):
 
         selected = feats[:]  # Copy
 
-        depend = self.eval_dependence(self._x[selected + ignore])["Dependence"]
+        depend = self.eval_dependence(ignore)["Dependence"]
 
         for feat in reversed(feats):
 
@@ -751,7 +749,7 @@ class Selector(_Evaluator):
                 # is no need to recalculate.
 
                 if not feat == feats[0]:
-                    depend = self.eval_dependence(self._x[selected + ignore])[
+                    depend = self.eval_dependence(ignore)[
                         "Dependence"
                     ]
 
@@ -795,17 +793,12 @@ class Selector(_Evaluator):
         """
         before = len(self._features)
 
-        # We'll add a column to the dataframe, so it is a good a idea
-        # copy to a new object and avoid inplace transformations.
-        x = self._x.copy()
-        y = self._y.copy()
-
         # Add a random column. Any feature less important than this will
         # be considered useless.
-        x, rnd_feat_name = self._add_random_feature(x)
+        self._x, rnd_feat_name = self._add_random_feature(self._x)
 
         # Get importances
-        imp = self.eval_importance(x, y, groups, n_times, n_jobs)
+        imp = self.eval_importance(groups, n_times, ignore, n_jobs)
 
         # Remove useless features.
         rnd_feat_imp = imp.loc[rnd_feat_name]["Importance"]
@@ -815,7 +808,7 @@ class Selector(_Evaluator):
         # Keeps the feature where the threshold occurs, and remove from
         # the next on.
         idx = np.searchsorted(imp["Cumulative Importance"], threshold)
-        remove = imp["Cumulative Importance"][idx + 1 :].index
+        remove = imp["Cumulative Importance"][idx + 1:].index
 
         if ignore:
             remove = [rm for rm in remove if rm not in ignore]
