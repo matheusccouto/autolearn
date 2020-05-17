@@ -1,5 +1,6 @@
-# TODO: Create function to select feature ignoring some.
 """ Automated feature engineering and selection. """
+# TODO: The ignore argument is used in several method.
+#  There should be a function to avoid repeating this routine.
 
 from typing import Union, Dict, Sequence, Optional, Tuple
 
@@ -170,7 +171,7 @@ class _Evaluator(_Operator):
         data[random_feat_name] = np.random.random(size=data.shape[0])
         return data, random_feat_name
 
-    # TODO Add CV option
+    # TODO Add CV option.
     def eval_importance(
         self,
         groups: Optional[Dict[str, Sequence[str]]] = None,
@@ -233,7 +234,7 @@ class _Evaluator(_Operator):
         self._importances = imp
         return imp
 
-    # TODO Add CV option
+    # TODO Add CV option.
     def eval_dependence(
         self, ignore: Optional[Union[str, Sequence[str]]] = None
     ) -> pd.DataFrame:
@@ -518,6 +519,7 @@ class Creator(_Operator):
         return self._x
 
 
+# TODO Study feature extraction to get ideas for new methods
 class Selector(_Evaluator):
     """ Automated feature selection. """
 
@@ -702,10 +704,9 @@ class Selector(_Evaluator):
 
         return self._x
 
-    # TODO Instead of running it again, do the same calculations only
-    #  Much faster. Probably there are some mean or agg that he does
-    #  to find multiple dependence. Do the same with the dataset you
-    #  already have.
+    # TODO This method run the same method several times. Instead of
+    #  this, it a better a idea to replicate the rfpimp method
+    #  calculation while running once.
     def drop_multiple_dependence(
         self,
         threshold: float = 0.95,

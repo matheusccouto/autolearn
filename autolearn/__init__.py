@@ -289,8 +289,8 @@ class Model:
             raise AttributeError("Parameters are not available yet.")
         return self._params
 
-    # TODO Params validation.
-    # TODO Read yml
+    # TODO Create a params validation method.
+    # TODO Make it possible to read params from a YAML file.
     @params.setter
     def params(self, value: Dict[str, Any]):
         self._params = value
@@ -370,10 +370,9 @@ class Model:
             return params
         raise ValueError(f"{task} is not a supported task.")
 
-    # TODO A two-step hyperparams tuning may be a good idea.
-    #  Start with a small sample to determine importance.
-    #  Then do the real tuning with a reduced number of varying params.
-    #  This will make possible to reach optimized params with less tries
+    # TODO Optimize tuning doing in two steps.
+    #  1 - With a smaller sample get param importance.
+    #  2 - Only tune params with importance above a threshold.
     def tune(
         self,
         x: pd.DataFrame,
