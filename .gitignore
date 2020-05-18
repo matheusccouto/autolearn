@@ -1,7 +1,8 @@
 # User Defined
 
 examples/
-boston.ipynb
+*.ipynb
+data/
 venv/
 
 # Created by https://www.gitignore.io/api/python,pycharm+all,jupyternotebooks

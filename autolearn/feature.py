@@ -838,7 +838,7 @@ class Selector(_Evaluator):
         max_multiple_dependence: Optional[float] = 0.95,
         max_cumulative_importance: Optional[float] = 0.95,
         ignore: Optional[Union[str, Sequence[str]]] = None,
-        n_jobs: int = -1,
+        n_jobs: int = 1,
         verbose: bool = True,
     ) -> pd.DataFrame:
         """ Automatically select features. """
