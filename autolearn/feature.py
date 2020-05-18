@@ -572,17 +572,20 @@ class Selector(_Evaluator):
 
         return self._x
 
-    def drop_single(
+    # TODO Transform drop single in drop low variance.
+    def drop_low_std(
         self,
+        threshold: float = 0.05,
         ignore: Optional[Union[str, Sequence[str]]] = None,
         verbose: bool = True,
     ):
         """
-        Drop features that contains only a single value.
+        Drop features that contains l
 
         Considers NA as a value.
 
         Args:
+            threshold: Max relative standard deviation threshold.
             ignore: Features to ignore during dropping.
             verbose: Verbosity. (default: False)
 
@@ -591,11 +594,14 @@ class Selector(_Evaluator):
         """
         before = len(self._features)
 
-        n_unique = self._x.nunique(axis=0, dropna=False)
+        std = self._x.std()
+        mean = self._x.mean()
+        norm_std = 2 * (std - mean).abs() / (std.abs() + mean.abs())
+        norm_std = norm_std.fillna(0)
         # Force the columns we want to ignore to zero.
         if ignore:
-            n_unique.loc[ignore] = np.inf
-        keep = n_unique[n_unique > 1].index
+            norm_std.loc[ignore] = np.inf
+        keep = norm_std[norm_std > threshold].index
 
         self._x = self._x[keep]
         self._features = list(self._x.columns)
@@ -603,7 +609,8 @@ class Selector(_Evaluator):
         after = len(self._features)
         if verbose:
             print(
-                f"Dropped {before - after} features with a single unique value"
+                f"Dropped {before - after} features with normalised"
+                f"standard deviation less than {threshold}"
             )
 
         return self._x
@@ -833,6 +840,7 @@ class Selector(_Evaluator):
     def transform(
         self,
         max_na_ratio: Optional[float] = 0,
+        min_std: Optional[float] = 0.05,
         max_correlation: Optional[float] = 0.95,
         max_single_dependence: Optional[float] = 0.95,
         max_multiple_dependence: Optional[float] = 0.95,
@@ -848,7 +856,8 @@ class Selector(_Evaluator):
         if max_na_ratio is not None:
             self.drop_na(threshold=max_na_ratio, ignore=ignore, verbose=verbose)
 
-        self.drop_single(ignore=ignore, verbose=verbose)
+        if min_std:
+            self.drop_low_std(threshold=min_std, ignore=ignore, verbose=verbose)
 
         if max_correlation:
             self.drop_correlated(

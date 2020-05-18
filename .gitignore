@@ -4,6 +4,7 @@ examples/
 *.ipynb
 data/
 venv/
+rfpimp.py
 
 # Created by https://www.gitignore.io/api/python,pycharm+all,jupyternotebooks
 # Edit at https://www.gitignore.io/?templates=python,pycharm+all,jupyternotebooks

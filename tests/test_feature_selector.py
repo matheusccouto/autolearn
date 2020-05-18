@@ -67,8 +67,8 @@ class TestDropNA:
         assert before == after
 
 
-class TestDropSingle:
-    """ Test the method drop_single from Selector class. """
+class TestDropLowSTD:
+    """ Test the method drop_low_std from Selector class. """
 
     @classmethod
     def setup_class(cls):
@@ -76,11 +76,11 @@ class TestDropSingle:
         cls.data = data.copy()
         cls.data["single"] = [0] * data.shape[0]
 
-    def test_drop_single(self):
-        """ Test dropping features with single values. """
+    def test_drop_low_std(self):
+        """ Test dropping features with low std. """
         feat = feature.Selector(self.data, target)
         before = feat._x.shape[1]
-        feat.drop_single()
+        feat.drop_low_std(threshold=.05)
         after = feat._x.shape[1]
         assert before > after
 
@@ -88,7 +88,7 @@ class TestDropSingle:
         """ Test if ignores a feature. """
         feat = feature.Selector(self.data, target)
         before = feat._x.shape[1]
-        feat.drop_single(ignore="single")
+        feat.drop_low_std(ignore="single")
         after = feat._x.shape[1]
         assert before == after
 
