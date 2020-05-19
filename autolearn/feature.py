@@ -808,15 +808,24 @@ class Selector(_Evaluator):
 
         # Add a random column. Any feature less important than this will
         # be considered useless.
-        self._x, rnd_feat_names = self._add_random_feature(self._x, 5)
+        self._x, rnd_feat_names = self._add_random_feature(self._x, 3)
 
         # Get importances
         imp = self.eval_importance(groups, n_times, ignore, n_jobs)
 
-        # Remove useless features.
+        # Remove useless features. (Below Random Mean)
         rnd_feat_imp = [imp.loc[name]["Importance"] for name in rnd_feat_names]
-        rnd_feat_imp = np.max(rnd_feat_imp)
+        rnd_feat_imp = np.mean(rnd_feat_imp)
         imp = imp[imp["Importance"] > rnd_feat_imp]
+        # Remove useless features. (Below 0)
+        imp = imp[imp["Importance"] > 0]
+
+        # Drop remaining random features.
+        for rnd in rnd_feat_names:
+            try:
+                imp = imp.drop(rnd, axis=0)
+            except KeyError:
+                pass
 
         # Remove based on cumulative importance threshold.
         # Keeps the feature where the threshold occurs, and remove from
