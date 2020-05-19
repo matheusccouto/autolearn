@@ -156,7 +156,7 @@ class TestAddRandomFeature:
 
     def test_name(self):
         """ Test if it append underscore when the name exists. """
-        assert self.name == "random_"
+        assert self.name == ["random_"]
 
     def test_dataframe_len(self):
         """ Test if it append underscore when the name exists. """

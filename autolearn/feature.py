@@ -74,11 +74,12 @@ class _Operator:
     @property
     def features(self) -> Sequence:
         """ Get or set features names. """
-        return self._features
+        return list(self._x.columns)
 
     @features.setter
     def features(self, value: Sequence):
-        self._features = [feat for feat in value if feat not in self._target]
+        features = [feat for feat in value if feat not in self._target]
+        self._x = self._x[features]
 
     @property
     def target(self) -> str:
@@ -168,8 +169,8 @@ class _Evaluator(_Operator):
             Tuple with DataFrame and name of the random column.
         """
         names = list()
-        random_feat_name = "random"
         for _ in range(amount):
+            random_feat_name = "random"
             while random_feat_name in data.columns:
                 random_feat_name += "_"
             data[random_feat_name] = np.random.random(size=data.shape[0])
@@ -198,8 +199,8 @@ class _Evaluator(_Operator):
         Returns:
             DataFrame
         """
-        # Prepare features list (os nested list).
-        features = self._features
+        # Prepare features list (or nested list).
+        features = self.features
         if ignore:
             features = [feat for feat in features if feat not in ignore]
         if groups:
@@ -254,9 +255,9 @@ class _Evaluator(_Operator):
         Returns:
             Feature dependence dataframe.
         """
-        feats = self._features
+        feats = self.features
         if ignore:
-            feats = [feat for feat in self._features if feat not in ignore]
+            feats = [feat for feat in feats if feat not in ignore]
         x = self._x[feats]
 
         model = sklearn.ensemble.RandomForestRegressor(10, oob_score=True)
@@ -467,9 +468,9 @@ class Creator(_Operator):
         """
         # Manage groups.
         if not groups:
-            groups = self._set_group(self._features)
+            groups = self._set_group(self.features)
         groups = self._fix_groups(
-            features=self._features, groups=groups, use_forgotten=use_forgotten
+            features=self.features, groups=groups, use_forgotten=use_forgotten
         )
 
         es = self._set_entity_set(data=self._x, groups=groups)
@@ -509,7 +510,7 @@ class Creator(_Operator):
         ]
         # Update property.
         # noinspection PyProtectedMember
-        self._features = [feature._name for feature in features]
+        self.features = [feature._name for feature in features]
 
         # Export params.
         if entity_set_folder_name:
@@ -546,7 +547,7 @@ class Selector(_Evaluator):
         Returns:
             DataFrame.
         """
-        before = len(self._features)
+        before = len(self.features)
 
         # Considers Inf or -Inf as NA
         pd.set_option("mode.use_inf_as_na", True)
@@ -567,9 +568,8 @@ class Selector(_Evaluator):
         keep = na_ratio[na_ratio <= threshold].index
 
         self._x = self._x[keep]
-        self._features = list(self._x.columns)
 
-        after = len(self._features)
+        after = len(self.features)
         if verbose:
             print(
                 f"Dropped {before - after} features with NA ratio greater than "
@@ -598,7 +598,7 @@ class Selector(_Evaluator):
         Returns:
             DataFrame
         """
-        before = len(self._features)
+        before = len(self.features)
 
         std = self._x.std()
         mean = self._x.mean()
@@ -610,9 +610,8 @@ class Selector(_Evaluator):
         keep = norm_std[norm_std > threshold].index
 
         self._x = self._x[keep]
-        self._features = list(self._x.columns)
 
-        after = len(self._features)
+        after = len(self.features)
         if verbose:
             print(
                 f"Dropped {before - after} features with normalised"
@@ -640,7 +639,7 @@ class Selector(_Evaluator):
         Returns:
             DataFrame
         """
-        before = len(self._features)
+        before = len(self.features)
 
         corr = self._x.corr(method="spearman").abs()
 
@@ -661,9 +660,8 @@ class Selector(_Evaluator):
         keep = max_corr[max_corr <= threshold].index
 
         self._x = self._x[keep]
-        self._features = list(self._x.columns)
 
-        after = len(self._features)
+        after = len(self.features)
         if verbose:
             print(
                 f"Dropped {before - after} features with correlation greater "
@@ -690,7 +688,7 @@ class Selector(_Evaluator):
         Returns:
             DataFrame
         """
-        before = len(self._features)
+        before = len(self.features)
 
         matrix = self.eval_dependence()
         matrix = matrix.drop("Dependence", axis=1)
@@ -706,9 +704,8 @@ class Selector(_Evaluator):
                 matrix = matrix.drop(idx, axis=1)
 
         self._x = self._x[matrix.index]
-        self._features = list(self._x.columns)
 
-        after = len(self._features)
+        after = len(self.features)
         if verbose:
             print(
                 f"Dropped {before - after} features with dependence from a "
@@ -741,9 +738,9 @@ class Selector(_Evaluator):
         Returns:
             DataFrame
         """
-        before = len(self._features)
+        before = len(self.features)
 
-        feats = self._features
+        feats = self.features
         if ignore:
             feats = [feat for feat in feats if feat not in ignore]
 
@@ -771,9 +768,8 @@ class Selector(_Evaluator):
                     depend = self.eval_dependence(ignore)["Dependence"]
 
         self._x = self._x[selected]
-        self._features = selected
 
-        after = len(self._features)
+        after = len(self.features)
         if verbose:
             print(
                 f"Dropped {before - after} features with dependence from "
@@ -808,7 +804,7 @@ class Selector(_Evaluator):
         Returns:
             DataFrame
         """
-        before = len(self._features)
+        before = len(self.features)
 
         # Add a random column. Any feature less important than this will
         # be considered useless.
@@ -833,9 +829,8 @@ class Selector(_Evaluator):
 
         keep = [i for i in imp.index if i not in remove]
         self._x = self._x[keep]
-        self._features = list(self._x.columns)
 
-        after = len(self._features)
+        after = len(self.features)
         if verbose:
             print(
                 f"Dropped {before - after} features with cumulative importance "
@@ -858,7 +853,7 @@ class Selector(_Evaluator):
     ) -> pd.DataFrame:
         """ Automatically select features. """
 
-        before = len(self._features)
+        before = len(self.features)
 
         if max_na_ratio is not None:
             self.drop_na(threshold=max_na_ratio, ignore=ignore, verbose=verbose)
@@ -891,7 +886,7 @@ class Selector(_Evaluator):
                 verbose=verbose,
             )
 
-        after = len(self._features)
+        after = len(self.features)
         if verbose:
             print(
                 f"Dropped a total of {before - after} features",
@@ -900,78 +895,3 @@ class Selector(_Evaluator):
             )
 
         return self._x
-
-
-# TODO Get rid of it
-class Engineer(_Evaluator):
-    """ Automated feature engineering. """
-
-    def transform(
-        self,
-        groups: Optional[Dict[str, Sequence[str]]] = None,
-        use_forgotten: bool = False,
-        trans_primitives: Optional[Sequence[str]] = None,
-        ignore: Optional[Union[str, Sequence[str]]] = None,
-        n_jobs: int = 1,
-        verbose: bool = True,
-    ):
-        """
-        Create and select new features.
-
-        This method do not allow much customization. For better
-        customization please use the classes Creator and Selector
-        separately.
-        """
-        # Clean initial data to avoid an excessive number of features
-        # later. The main goal is to eliminate collinearity.
-        # That is why low importance features are kept. We want to
-        # find out if these low importance features are able to create
-        # important ones.
-
-        selector = Selector(
-            data=self.data,
-            target=self.target,
-            features=self.features,
-            task=self.task,
-        )
-
-        selector.transform(
-            max_multiple_dependence=None,
-            max_cumulative_importance=None,
-            ignore=ignore,
-            n_jobs=n_jobs,
-            verbose=verbose,
-        )
-        data = selector.data
-        features = selector.features
-
-        # Create features
-
-        creator = Creator(
-            data=data, target=self.target, features=features, task=self.task
-        )
-        creator.transform(
-            groups=groups,
-            use_forgotten=use_forgotten,
-            trans_primitives=trans_primitives,
-            n_jobs=n_jobs,
-            verbose=verbose,
-        )
-        data = creator.data
-        features = creator.features
-
-        # Do one final deep selection.
-
-        selector.data = data
-        selector.features = features
-
-        selector.transform(
-            max_single_dependence=None,
-            max_multiple_dependence=None,
-            ignore=ignore,
-            n_jobs=n_jobs,
-            verbose=verbose,
-        )
-
-        self.data = selector.data
-        self.features = selector.features
