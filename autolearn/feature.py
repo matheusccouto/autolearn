@@ -154,22 +154,27 @@ class _Evaluator(_Operator):
         return nested + forgotten
 
     @staticmethod
-    def _add_random_feature(data: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
+    def _add_random_feature(
+        data: pd.DataFrame, amount: int = 1
+    ) -> Tuple[pd.DataFrame, Sequence[str]]:
         """
         Add a feature of random values to a dataframe.
 
         Args:
             data: DataFrame
+            amount: Amount of random features to add.
 
         Returns:
             Tuple with DataFrame and name of the random column.
         """
+        names = list()
         random_feat_name = "random"
-        while random_feat_name in data.columns:
-            random_feat_name += "_"
-
-        data[random_feat_name] = np.random.random(size=data.shape[0])
-        return data, random_feat_name
+        for _ in range(amount):
+            while random_feat_name in data.columns:
+                random_feat_name += "_"
+            data[random_feat_name] = np.random.random(size=data.shape[0])
+            names.append(random_feat_name)
+        return data, names
 
     # TODO Add CV option.
     def eval_importance(
@@ -258,6 +263,7 @@ class _Evaluator(_Operator):
         return rfpimp.feature_dependence_matrix(x, rfmodel=model)
 
 
+# TODO Add support to Agg Primitives
 class Creator(_Operator):
     """ Automated feature creation. """
 
@@ -610,7 +616,7 @@ class Selector(_Evaluator):
         if verbose:
             print(
                 f"Dropped {before - after} features with normalised"
-                f"standard deviation less than {threshold}"
+                f" standard deviation less than {threshold}"
             )
 
         return self._x
@@ -806,13 +812,14 @@ class Selector(_Evaluator):
 
         # Add a random column. Any feature less important than this will
         # be considered useless.
-        self._x, rnd_feat_name = self._add_random_feature(self._x)
+        self._x, rnd_feat_names = self._add_random_feature(self._x, 5)
 
         # Get importances
         imp = self.eval_importance(groups, n_times, ignore, n_jobs)
 
         # Remove useless features.
-        rnd_feat_imp = imp.loc[rnd_feat_name]["Importance"]
+        rnd_feat_imp = [imp.loc[name]["Importance"] for name in rnd_feat_names]
+        rnd_feat_imp = np.max(rnd_feat_imp)
         imp = imp[imp["Importance"] > rnd_feat_imp]
 
         # Remove based on cumulative importance threshold.
@@ -895,6 +902,7 @@ class Selector(_Evaluator):
         return self._x
 
 
+# TODO Get rid of it
 class Engineer(_Evaluator):
     """ Automated feature engineering. """
 
