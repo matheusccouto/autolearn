@@ -13,7 +13,7 @@
 
 n_estimators:
   int:
-    low: 10
+    low: 100
     high: 100
 max_depth:
   int:
