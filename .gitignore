@@ -1,7 +1,6 @@
 # User Defined
 
 examples/
-*.ipynb
 data/
 venv/
 rfpimp.py
