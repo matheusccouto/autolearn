@@ -18,7 +18,7 @@ n_estimators:
 max_depth:
   int:
     low: 1
-    high: 10
+    high: 100
     step: 1
 learning_rate:
   float:
