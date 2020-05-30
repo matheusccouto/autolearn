@@ -430,5 +430,8 @@ class Model:
     def fit(self, x: pd.DataFrame, y: pd.Series, *args, **kwargs):
         self._model.fit(x, y, *args, **kwargs)
 
+    def predict(self, x: pd.DataFrame, *args, **kwargs):
+        return self._model.predict(data=x, *args, **kwargs)
+
     def score(self, x: pd.DataFrame, y: pd.Series, *args, **kwargs):
         return self._scorer(self._model, x, y, *args, **kwargs)
